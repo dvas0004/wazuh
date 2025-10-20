@@ -69,6 +69,11 @@ public:
         static DB s_instance;
         return s_instance;
     }
+    const std::map<std::string, std::string> TABLE_PRIMARY_KEYS = {
+        {FIMDB_FILE_TABLE_NAME, "path"},
+        {FIMDB_REGISTRY_KEY_TABLENAME, "architecture, path"},
+        {FIMDB_REGISTRY_VALUE_TABLENAME, "path, architecture, value"}
+    };
 
     /**
      * @brief Init facade with database connection
@@ -140,12 +145,18 @@ public:
     *
     * @return true if first scan has been synched, false otherwise.
     */
-   bool checkIfFirstScanHasBeenSynched() const;
+    bool checkIfFirstScanHasBeenSynched() const;
 
     /**
     * @brief Set the first_scan_has_been_synched flag.
     */
-   void setFirstScanHasBeenSynched();
+    void setFirstScanHasBeenSynched();
+
+    /**
+    * @brief Gets the concatenated checksums from all the elements of a table
+    * @return the concatenated checksum
+    */
+    std::string getConcatenatedChecksums(const std::string& tableName);
 
 private:
     DB() = default;
