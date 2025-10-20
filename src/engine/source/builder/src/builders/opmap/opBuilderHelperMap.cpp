@@ -16,6 +16,7 @@
 #include <openssl/sha.h>
 #include <re2/re2.h>
 
+#include "base/utils/sanitizers.hpp"
 #include <base/error.hpp>
 #include <base/utils/communityId.hpp>
 #include <base/utils/ipUtils.hpp>
