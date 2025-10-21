@@ -97,6 +97,85 @@ const wm_context WM_AGENT_INFO_CONTEXT = {.name = AGENT_INFO_WM_NAME,
 // Static Helper Functions
 // ==============================================================================
 
+// Helper function to query other modules
+static int wm_agent_info_query_module(const char* module_name, const char* query, char** response)
+{
+    if (!module_name || !query || !response)
+    {
+        return -1;
+    }
+
+    // Build full query: "module_name query_args"
+    size_t full_query_len = strlen(module_name) + 1 + strlen(query) + 1;
+    char* full_query;
+    os_calloc(full_query_len, sizeof(char), full_query);
+    snprintf(full_query, full_query_len, "%s %s", module_name, query);
+
+    // Call wm_module_query (defined in wmodules.c)
+    size_t response_len = wm_module_query(full_query, response);
+
+    os_free(full_query);
+
+    if (response_len == 0 || !(*response))
+    {
+        return -1;
+    }
+
+    // Check if response starts with "ok" or "err"
+    if (strncmp(*response, "ok", 2) == 0)
+    {
+        return 0; // Success
+    }
+    else
+    {
+        return -1; // Error
+    }
+}
+
+// Example usage function that demonstrates querying SCA
+static void wm_agent_info_test_coordination(void)
+{
+    char* response = NULL;
+
+    // Send "status" command to SCA
+    minfo("Querying SCA status...");
+    if (wm_agent_info_query_module("sca", "status", &response) == 0)
+    {
+        minfo("SCA response: %s", response);
+    }
+    else
+    {
+        mwarn("Failed to query SCA: %s", response ? response : "no response");
+    }
+    os_free(response);
+    response = NULL;
+
+    // Send "pause" command to SCA
+    minfo("Sending pause command to SCA...");
+    if (wm_agent_info_query_module("sca", "pause", &response) == 0)
+    {
+        minfo("SCA response: %s", response);
+    }
+    else
+    {
+        mwarn("Failed to pause SCA: %s", response ? response : "no response");
+    }
+    os_free(response);
+    response = NULL;
+
+    // Send "resume" command to SCA
+    minfo("Sending resume command to SCA...");
+    if (wm_agent_info_query_module("sca", "resume", &response) == 0)
+    {
+        minfo("SCA response: %s", response);
+    }
+    else
+    {
+        mwarn("Failed to resume SCA: %s", response ? response : "no response");
+    }
+    os_free(response);
+}
+
 // Synchronization parsing function
 static void wm_agent_info_parse_synchronization(wm_agent_info_t* agent_info, xml_node** node)
 {
@@ -449,6 +528,12 @@ void* wm_agent_info_main(wm_agent_info_t* agent_info)
     if (agent_info_start_ptr)
     {
         minfo("Starting agent-info module...");
+
+        // Test inter-module communication (IPC) by querying SCA
+        // This demonstrates the query mechanism for module coordination
+        minfo("Testing IPC with SCA module...");
+        wm_agent_info_test_coordination();
+
         agent_info_start_ptr(agent_info);
     }
     else

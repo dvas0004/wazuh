@@ -82,6 +82,8 @@ cJSON *wm_sca_dump(const wm_sca_t * data);     // Read config
 
 int wm_sca_sync_message(const char *command, size_t command_len); // Send sync message
 
+static size_t wm_sca_query_handler(void *data, char *query, char **output); // Query handler
+
 const wm_context WM_SCA_CONTEXT = {
     .name = SCA_WM_NAME,
     .start = (wm_routine)wm_sca_main,
@@ -89,7 +91,7 @@ const wm_context WM_SCA_CONTEXT = {
     .dump = (cJSON * (*)(const void *))wm_sca_dump,
     .sync = (int(*)(const char*, size_t))wm_sca_sync_message,
     .stop = (void(*)(void *))wm_sca_stop,
-    .query = NULL,
+    .query = wm_sca_query_handler,
 };
 
 void *sca_module = NULL;
@@ -104,6 +106,10 @@ sca_set_sync_parameters_func sca_set_sync_parameters_ptr = NULL;
 sca_sync_module_func sca_sync_module_ptr = NULL;
 sca_persist_diff_func sca_persist_diff_ptr = NULL;
 sca_parse_response_func sca_parse_response_ptr = NULL;
+
+// Query function pointer
+typedef size_t (*sca_query_func)(const char* query, char** output);
+sca_query_func sca_query_ptr = NULL;
 
 // YAML to cJSON function pointer
 sca_set_yaml_to_cjson_func_func sca_set_yaml_to_cjson_func_ptr = NULL;
@@ -169,6 +175,9 @@ void * wm_sca_main(wm_sca_t * data) {
         sca_sync_module_ptr = so_get_function_sym(sca_module, "sca_sync_module");
         sca_persist_diff_ptr = so_get_function_sym(sca_module, "sca_persist_diff");
         sca_parse_response_ptr = so_get_function_sym(sca_module, "sca_parse_response");
+
+        // Get query function pointer
+        sca_query_ptr = so_get_function_sym(sca_module, "sca_query");
 
         // Set the logging function pointer in the SCA module
         if (sca_set_log_function_ptr) {
@@ -420,6 +429,23 @@ void * wm_sca_sync_module(__attribute__((unused)) void * args) {
 #else
     return NULL;
 #endif
+}
+
+static size_t wm_sca_query_handler(void *data, char *query, char **output) {
+    (void)data;  // Unused parameter
+
+    if (!query || !output) {
+        os_strdup("err Invalid parameters", *output);
+        return strlen(*output);
+    }
+
+    // Call the C++ query function if available
+    if (sca_query_ptr) {
+        return sca_query_ptr(query, output);
+    } else {
+        os_strdup("err SCA query function not available", *output);
+        return strlen(*output);
+    }
 }
 
 static cJSON* wm_sca_yaml_to_cjson(const char* yaml_path)

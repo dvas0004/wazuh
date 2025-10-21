@@ -50,6 +50,9 @@ EXPORTED bool sca_sync_module(Mode_t mode, unsigned int timeout, unsigned int re
 EXPORTED void sca_persist_diff(const char* id, Operation_t operation, const char* index, const char* data);
 EXPORTED bool sca_parse_response(const unsigned char* data, size_t length);
 
+// Query function
+EXPORTED size_t sca_query(const char* query, char** output);
+
 // YAML to cJSON function
 EXPORTED void sca_set_yaml_to_cjson_func(yaml_to_cjson_func yaml_func);
 

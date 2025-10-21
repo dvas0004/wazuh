@@ -391,6 +391,57 @@ bool sca_parse_response(const unsigned char* data, size_t length)
 
 // LCOV_EXCL_STOP
 
+/// @brief Query handler for SCA module.
+///
+/// Handles query commands sent to the SCA module from other modules.
+/// Supports commands like "pause", "resume", and "status".
+///
+/// @param query Query command string
+/// @param output Pointer to output string (caller must free with os_free)
+/// @return Length of the output string
+size_t sca_query(const char* query, char** output)
+{
+    if (!query || !output)
+    {
+        *output = strdup("err Invalid parameters");
+        return strlen(*output);
+    }
+
+    try
+    {
+        std::string query_str(query);
+
+        if (query_str == "pause")
+        {
+            // Pause functionality - placeholder for actual implementation
+            *output = strdup("ok SCA scan pause command received");
+        }
+        else if (query_str == "resume")
+        {
+            // Resume functionality - placeholder for actual implementation
+            *output = strdup("ok SCA scan resume command received");
+        }
+        else if (query_str == "status")
+        {
+            // Status query - placeholder for actual implementation
+            *output = strdup("ok SCA scan is running");
+        }
+        else
+        {
+            std::string error = "err Unknown SCA query command: " + query_str;
+            *output = strdup(error.c_str());
+        }
+
+        return strlen(*output);
+    }
+    catch (const std::exception& ex)
+    {
+        std::string error = "err " + std::string(ex.what());
+        *output = strdup(error.c_str());
+        return strlen(*output);
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif
