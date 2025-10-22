@@ -1229,6 +1229,116 @@ MapOp opBuilderHelperHexToNumber(const std::vector<OpArg>& opArgs, const std::sh
     };
 }
 
+// field: +iana_protocol_name_to_number/$<protocol_name_reference>
+MapOp opBuilderHelperIanaProtocolNameToNumber(const std::vector<OpArg>& opArgs,
+                                              const std::shared_ptr<const IBuildCtx>& buildCtx)
+{
+    // Exactly one argument: must be a reference to a JSON string.
+    builder::builders::utils::assertSize(opArgs, 1);
+    builder::builders::utils::assertRef(opArgs, 0);
+
+    const auto ref = *std::static_pointer_cast<Reference>(opArgs[0]);
+
+    if (buildCtx->validator().hasField(ref.dotPath()))
+    {
+        const auto jType = buildCtx->validator().getJsonType(ref.dotPath());
+        if (jType != json::Json::Type::String)
+        {
+            throw std::runtime_error(fmt::format("Expected 'string' reference but got reference '{}' of type '{}'",
+                                                 ref.dotPath(),
+                                                 json::Json::typeToStr(jType)));
+        }
+    }
+    const std::string name = buildCtx->context().opName;
+    const std::string successTrace {fmt::format(TRACE_SUCCESS, name)};
+    const std::string failureMissingOrNotString {
+        fmt::format("{} -> Reference '{}' is missing or not a string", name, ref.dotPath())};
+
+    const auto sourcePath = ref.jsonPath();
+
+    return [sourcePath, name, successTrace, failureMissingOrNotString, runState = buildCtx->runState()](
+               base::ConstEvent event) -> MapResult
+    {
+        // returns nullopt if missing or not a string
+        const auto s = event->getString(sourcePath);
+        if (!s.has_value())
+        {
+            RETURN_FAILURE(runState, json::Json {}, failureMissingOrNotString);
+        }
+
+        // Strict IANA lookup
+        if (auto code = ::utils::ip::ianaProtocolNameToNumber(*s))
+        {
+            json::Json out;
+            out.setInt64(static_cast<std::int64_t>(*code));
+            RETURN_SUCCESS(runState, out, successTrace);
+        }
+
+        const std::string failureUnknown = fmt::format("[{}] -> Failure: Unknown IANA protocol name '{}'", name, *s);
+        RETURN_FAILURE(runState, json::Json {}, failureUnknown);
+    };
+}
+
+// field: +iana_protocol_number_to_name/$<protocol_number_reference>
+MapOp opBuilderHelperIanaProtocolNumberToName(const std::vector<OpArg>& opArgs,
+                                              const std::shared_ptr<const IBuildCtx>& buildCtx)
+{
+    builder::builders::utils::assertSize(opArgs, 1);
+    builder::builders::utils::assertRef(opArgs, 0);
+
+    const auto ref = *std::static_pointer_cast<Reference>(opArgs[0]);
+
+    if (buildCtx->validator().hasField(ref.dotPath()))
+    {
+        const auto jType = buildCtx->validator().getJsonType(ref.dotPath());
+        if (jType != json::Json::Type::Number)
+        {
+            throw std::runtime_error(fmt::format("Expected 'number' reference but got reference '{}' of type '{}'",
+                                                 ref.dotPath(),
+                                                 json::Json::typeToStr(jType)));
+        }
+    }
+
+    const std::string name = buildCtx->context().opName;
+    const std::string successTrace {fmt::format(TRACE_SUCCESS, name)};
+    const std::string failureMissingOrNotNumber {
+        fmt::format("{} -> Reference '{}' is missing or not a number", name, ref.dotPath())};
+    const std::string failureNotIntegerOrRange {
+        fmt::format("{} -> Protocol number must be an integer in [0,255]", name)};
+
+    const auto sourcePath = ref.jsonPath();
+
+    return [sourcePath,
+            name,
+            successTrace,
+            failureMissingOrNotNumber,
+            failureNotIntegerOrRange,
+            runState = buildCtx->runState()](base::ConstEvent event) -> MapResult
+    {
+        const auto intOpt = event->getIntAsInt64(sourcePath);
+        if (!intOpt.has_value())
+        {
+            RETURN_FAILURE(runState, json::Json {}, failureMissingOrNotNumber);
+        }
+        if (*intOpt < 0 || *intOpt > 255)
+        {
+            RETURN_FAILURE(runState, json::Json {}, failureNotIntegerOrRange);
+        }
+
+        const auto code = static_cast<uint8_t>(*intOpt);
+        if (auto nameOpt = ::utils::ip::ianaProtocolNumberToName(code))
+        {
+            json::Json out;
+            out.setString(*nameOpt);
+            RETURN_SUCCESS(runState, out, successTrace);
+        }
+
+        const std::string failureUnknown =
+            fmt::format("[{}] -> Failure: Unknown/unassigned IANA protocol number '{}'", name, static_cast<int>(code));
+        RETURN_FAILURE(runState, json::Json {}, failureUnknown);
+    };
+}
+
 // field: +array_obj_to_mapkv/$<array_reference>
 MapOp opBuilderHelperArrayObjToMapkv(const std::vector<OpArg>& opArgs, const std::shared_ptr<const IBuildCtx>& buildCtx)
 {
