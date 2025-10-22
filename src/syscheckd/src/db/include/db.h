@@ -184,6 +184,10 @@ extern "C"
      * @note Caller must free(*out_string_ptr) when done.
      */
     EXPORTED FIMDBErrorCode fim_db_get_table_concatenated_checksums(char** out_string_ptr, char* table_name);
+
+
+    EXPORTED void fim_db_recover_module_data(AgentSyncProtocolHandle* protocol);
+
 #ifdef WIN32
 
     // Registry functions.
