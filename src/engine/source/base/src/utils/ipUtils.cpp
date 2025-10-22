@@ -1,9 +1,9 @@
 #include "utils/ipUtils.hpp"
 
+#include <algorithm>
 #include <arpa/inet.h>
-
-#include <fmt/format.h>
-
+#include <cstring>
+#include <limits>
 namespace utils::ip
 {
 
@@ -64,7 +64,9 @@ uint32_t IPv4MaskUInt(const std::string& maskStr)
 
 bool checkStrIsIPv4(const std::string& ip, std::array<uint8_t, 4>* outBytes)
 {
-    struct in_addr buf;
+    struct in_addr buf
+    {
+    };
     if (inet_pton(AF_INET, ip.c_str(), &buf) != 1)
         return false;
 
@@ -76,7 +78,9 @@ bool checkStrIsIPv4(const std::string& ip, std::array<uint8_t, 4>* outBytes)
 
 bool checkStrIsIPv6(const std::string& ip, std::array<uint8_t, 16>* outBytes)
 {
-    struct in6_addr buf;
+    struct in6_addr buf
+    {
+    };
     if (inet_pton(AF_INET6, ip.c_str(), &buf) != 1)
         return false;
 
@@ -112,6 +116,72 @@ bool isSpecialIPv6Address(const std::string& ip)
     return IN6_IS_ADDR_LOOPBACK(&addr)                              // Loopback
            || IN6_IS_ADDR_LINKLOCAL(&addr)                          // Link-local fe80::/10
            || (addr.s6_addr[0] == 0xFC || addr.s6_addr[0] == 0xFD); // ULA fc00::/7
+}
+
+const std::unordered_map<std::string_view, uint8_t>& IANA_PROTOCOL_NAME_TO_NUMBER()
+{
+    static const std::unordered_map<std::string_view, uint8_t> map = []
+    {
+        // Keep the cast to uint8_t safe if someone ever changes the table size.
+        static_assert(IANA_NUMBER_TO_PROTOCOL_NAME_TABLE.size() <= (std::numeric_limits<uint8_t>::max() + 1u),
+                      "IANA table size exceeds uint8_t range (0..255)");
+
+        std::unordered_map<std::string_view, uint8_t> m;
+
+        // Reserve precisely the number of non-empty entries.
+        const auto nonEmpty = std::count_if(IANA_NUMBER_TO_PROTOCOL_NAME_TABLE.begin(),
+                                            IANA_NUMBER_TO_PROTOCOL_NAME_TABLE.end(),
+                                            [](std::string_view s) { return !s.empty(); });
+        m.reserve(nonEmpty);
+
+        // Use the container’s index type to avoid width/sign warnings.
+        using index_t = decltype(IANA_NUMBER_TO_PROTOCOL_NAME_TABLE.size());
+        for (index_t i = 0; i < IANA_NUMBER_TO_PROTOCOL_NAME_TABLE.size(); ++i)
+        {
+            std::string_view name = IANA_NUMBER_TO_PROTOCOL_NAME_TABLE[i];
+            if (!name.empty())
+                m.emplace(name, static_cast<uint8_t>(i));
+        }
+        return m;
+    }();
+    return map;
+}
+
+std::string normalizeIanaProtocolName(std::string_view in)
+{
+    std::string s(in);
+    std::transform(s.begin(),
+                   s.end(),
+                   s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+    for (char& c : s)
+        if (c == '_' || std::isspace(static_cast<unsigned char>(c)))
+            c = '-';
+    // aliases -> canonical keys used in the table
+    if (s == "icmpv6")
+        s = "ipv6-icmp";
+    if (s == "udp-lite")
+        s = "udplite";
+    if (s == "ip-in-ip")
+        s = "ipip";
+    return s;
+}
+
+std::optional<uint8_t> ianaProtocolNameToNumber(std::string_view name)
+{
+    const std::string key = normalizeIanaProtocolName(name);
+    const auto& m = IANA_PROTOCOL_NAME_TO_NUMBER();
+    if (auto it = m.find(key); it != m.end())
+        return it->second;
+    return std::nullopt;
+}
+
+std::optional<std::string_view> ianaProtocolNumberToName(uint8_t code)
+{
+    std::string_view s = IANA_NUMBER_TO_PROTOCOL_NAME_TABLE[code];
+    if (s.empty())
+        return std::nullopt;
+    return s;
 }
 
 } // namespace utils::ip
