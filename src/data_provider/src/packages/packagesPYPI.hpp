@@ -126,6 +126,13 @@ class PYPI final : public TFileSystem, public TFileIO
             {
                 try
                 {
+                    // Skip symlinked Python versions (Versions/Current is typically a symlink)
+                    // to avoid reporting duplicate packages
+                    if (expandedPath.find("/Versions/Current/") != std::string::npos)
+                    {
+                        continue;
+                    }
+
                     // Exist and is a directory
                     if (TFileSystem::exists(expandedPath) && TFileSystem::is_directory(expandedPath))
                     {

@@ -392,3 +392,63 @@ TEST_F(PYPITest, getPackages_InvalidPackageTest_MissingVersion)
     std::cout << capturedJson.dump(4) << std::endl;
     EXPECT_TRUE(capturedJson.empty());
 }
+
+TEST_F(PYPITest, getPackages_SkipsVersionsCurrentSymlinkTest)
+{
+    // This test verifies that paths containing /Versions/Current/ are skipped
+    // to avoid duplicate package reporting when Current is a symlink to an actual version
+    std::vector<std::filesystem::path> fakeFiles = {"/fake/dir/egg-info"};
+
+    EXPECT_CALL(*pypi, exists(_)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*pypi, is_directory(_)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*pypi, directory_iterator(_)).WillRepeatedly(Return(fakeFiles));
+
+    int callbackCount = 0;
+    auto callback = [&](nlohmann::json & j)
+    {
+        callbackCount++;
+    };
+
+    // Path containing /Versions/Current/ should be skipped
+    std::set<std::string> folders = { "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/Current/lib/python3.9/site-packages" };
+
+    pypi->getPackages(folders, callback);
+
+    // The callback should not have been called because the path contains /Versions/Current/
+    EXPECT_EQ(callbackCount, 0);
+}
+
+TEST_F(PYPITest, getPackages_AllowsNonCurrentVersionPathsTest)
+{
+    // This test verifies that normal version paths (not Current) are processed normally
+    std::vector<std::filesystem::path> fakeFiles = {"/fake/dir/egg-info"};
+
+    EXPECT_CALL(*pypi, exists(_)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*pypi, is_directory(_)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*pypi, directory_iterator(_)).WillRepeatedly(Return(fakeFiles));
+    EXPECT_CALL(*pypi, is_regular_file(_)).WillRepeatedly(Return(true));
+
+    std::vector<std::string> fakePackageLines = {"Name: TestPackage", "Version: 1.0.0"};
+    EXPECT_CALL(*pypi, readLineByLine(_, _)).WillOnce([&](const std::filesystem::path&, const std::function<bool(const std::string&)>& callback)
+    {
+        for (const auto& line : fakePackageLines)
+        {
+            callback(line);
+        }
+    });
+
+    nlohmann::json capturedJson;
+    auto callback = [&](nlohmann::json & j)
+    {
+        capturedJson = j;
+    };
+
+    // Path with actual version number (not Current) should be processed
+    std::set<std::string> folders = { "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/site-packages" };
+
+    pypi->getPackages(folders, callback);
+
+    // The package should have been found and processed
+    EXPECT_EQ(capturedJson.at("name"), "TestPackage");
+    EXPECT_EQ(capturedJson.at("version"), "1.0.0");
+}
