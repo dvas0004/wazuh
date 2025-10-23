@@ -35,7 +35,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # -----------------------------------------------------------------------------
 # Use pre-built flatc from src/Makefile
 # -----------------------------------------------------------------------------
-set(FLATBUFFERS_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/flatbuffers")
+set(FLATBUFFERS_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../external/flatbuffers")
 set(FLATC_EXECUTABLE ${FLATBUFFERS_ROOT_DIR}/build/flatc)
 
 # Verify flatc exists
@@ -49,7 +49,7 @@ message(STATUS "Using flatc from: ${FLATC_EXECUTABLE}")
 # Use flatc to generate schema
 # -----------------------------------------------------------------------------
 set(SCHEMA_FILE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../utils/flatbuffers/schemas/inventorySync.fbs
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared_modules/utils/flatbuffers/schemas/inventorySync.fbs
 )
 set(GENERATED_HEADER ${CMAKE_CURRENT_BINARY_DIR}/inventorySync_generated.h)
 
@@ -80,7 +80,7 @@ add_library(agent_sync_protocol SHARED
   src/persistent_queue_storage.cpp
   ${GENERATED_HEADER}
   src/agent_sync_protocol_c_interface.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../${RESOURCE_OBJ}
+  ${CMAKE_CURRENT_SOURCE_DIR}/../${RESOURCE_OBJ}
 )
 add_dependencies(agent_sync_protocol generate_flatbuffers)
 
@@ -90,22 +90,38 @@ target_include_directories(agent_sync_protocol
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}
     ${FLATBUFFERS_ROOT_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../
-    ${CMAKE_CURRENT_SOURCE_DIR}/../utils/
-    ${CMAKE_SOURCE_DIR}/../../headers
-    ${CMAKE_CURRENT_SOURCE_DIR}/../file_helper/filesystem/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared_modules/utils/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared_modules/common/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared_modules/file_helper/filesystem/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared_modules/file_helper/file_io/include/
+    ${CMAKE_SOURCE_DIR}/../headers
+    ${CMAKE_CURRENT_SOURCE_DIR}/../data_provider/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../external/nlohmann
+    ${CMAKE_CURRENT_SOURCE_DIR}/../external/cJSON
 )
 
-target_link_directories(agent_sync_protocol
-  PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../file_helper/build/lib
+find_library(SYSINFO_LIB
+  NAMES sysinfo
+  PATHS
+    ${CMAKE_CURRENT_SOURCE_DIR}/../data_provider/build/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/../data_provider/build
+    ${CMAKE_CURRENT_SOURCE_DIR}/../data_provider/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/../data_provider
+  NO_DEFAULT_PATH
 )
+
+message(STATUS "JOACO: ${CMAKE_CURRENT_SOURCE_DIR}")
+
+if(NOT SYSINFO_LIB)
+  message(FATAL_ERROR "sysinfo library not found. Please build data_provider before building agent_sync_protocol.")
+endif()
 
 target_link_libraries(agent_sync_protocol
   PRIVATE
-  flatbuffers
-  FilesystemWrapper
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../external/sqlite/libsqlite3.a
+    ${SYSINFO_LIB}
+    flatbuffers
+    ${CMAKE_CURRENT_SOURCE_DIR}/../external/sqlite/libsqlite3.a
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
