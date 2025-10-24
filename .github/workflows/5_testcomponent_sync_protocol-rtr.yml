@@ -6,7 +6,7 @@ on:
     paths:
       - "src/ci/**"
       - "src/build.py"
-      - "src/shared_modules/sync_protocol/**"
+      - "src/sync_protocol/**"
       - ".github/workflows/5_testcomponent_sync_protocol-rtr.yml"
       - ".github/actions/**"
 
