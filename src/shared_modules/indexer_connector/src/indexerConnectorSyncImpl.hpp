@@ -191,7 +191,7 @@ class IndexerConnectorSyncImpl final
 
                 std::string url;
                 url += m_selector->getNext();
-                url += "/_bulk?refresh=wait_for";
+                url += "/_bulk";
                 logDebug2(IC_NAME, "Sending bulk data to: %s", url.c_str());
                 logDebug2(IC_NAME, "Bulk data: %s", m_bulkData.c_str());
 
@@ -276,7 +276,7 @@ class IndexerConnectorSyncImpl final
     {
         std::string url;
         url += m_selector->getNext();
-        url += "/_bulk?refresh=wait_for";
+        url += "/_bulk";
         bool needToRetry = false;
 
         const auto onSuccess = [](const std::string& response)
@@ -493,8 +493,31 @@ public:
     }
     void bulkIndex(std::string_view id, std::string_view index, std::string_view data)
     {
-        if (constexpr auto FORMATTED_SIZE {FORMATTED_LENGTH};
-            m_bulkData.length() + FORMATTED_SIZE + index.size() + id.size() + data.size() > MaxBulkSize)
+        bulkIndex(id, index, data, "");
+    }
+
+    void bulkIndex(std::string_view id, std::string_view index, std::string_view data, std::string_view version)
+    {
+        constexpr auto FORMATTED_SIZE {FORMATTED_LENGTH};
+        constexpr auto VERSION_SIZE {32};
+
+        // Validate input parameters
+        if (index.empty())
+        {
+            logError(IC_NAME, "Index name cannot be empty for document: %.*s", static_cast<int>(id.size()), id.data());
+            throw IndexerConnectorException("Index name cannot be empty");
+        }
+
+        if (data.empty())
+        {
+            logWarn(IC_NAME, "Empty data provided for document %.*s in index %.*s",
+                   static_cast<int>(id.size()), id.data(),
+                   static_cast<int>(index.size()), index.data());
+        }
+
+        const auto totalSize = m_bulkData.length() + FORMATTED_SIZE + VERSION_SIZE + index.size() + id.size() + data.size();
+
+        if (totalSize > MaxBulkSize)
         {
             processBulk();
         }
@@ -502,6 +525,20 @@ public:
         m_bulkData.append(index);
         m_bulkData.append(R"(","_id":")");
         m_bulkData.append(id);
+        if (!version.empty())
+        {
+            m_bulkData.append(R"(","version":")");
+            m_bulkData.append(version);
+            m_bulkData.append(R"(","version_type":"external_gte")");
+            logDebug2(IC_NAME, "Using external version %.*s for document %.*s",
+                     static_cast<int>(version.size()), version.data(),
+                     static_cast<int>(id.size()), id.data());
+        }
+        else
+        {
+            logDebug2(IC_NAME, "No version specified for document %.*s, using default versioning",
+                     static_cast<int>(id.size()), id.data());
+        }
         m_bulkData.append(R"("}})");
         m_bulkData.append("\n");
         m_bulkData.append(data);
